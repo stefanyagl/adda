@@ -1,6 +1,8 @@
-/* Routines for determining parameters of the chebyshev particles
+/* FILE : chebyshev.c
+ * $Date::                            $
+ * Descr: routines for determining parameters of the chebyshev particles
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2011-2013 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -75,7 +77,7 @@ static double Xfunc(double x,enum newt_func mode)
 			cn=cos(xn);
 			return (e*n*cn*c-(1+e*sn)*s)/(-2*e*n*cn*s-(1+e*(1+n*n)*sn)*c);
 	}
-	LogError(ONE_POS,"Unknown mode %d for calling Xfunc",(int)mode);
+	LogError(ONE_POS,"Unknown mode %d for calling Zfunc",(int)mode);
 }
 
 //======================================================================================================================

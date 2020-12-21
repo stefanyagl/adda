@@ -1,6 +1,8 @@
-/* Definitions for linear algebra operations on large vectors; see source (linalg.c) for details
+/* File: linalg.h
+ * $Date::                            $
+ * Descr: definitions for linear algebra operations on large vectors; see source (linalg.c) for details
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006,2008,2010-2013 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as

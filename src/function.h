@@ -1,6 +1,8 @@
-/* Function attributes and compiler pragmas
+/* File: function.h
+ * $Date::                            $
+ * Descr: function attributes and compiler pragmas
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006,2008,2010-2011,2013-2014 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -15,10 +17,7 @@
 #ifndef __function_h
 #define __function_h
 
-// redefine it here instead of including const.h to avoid warnings in C++ code that uses this header
-#ifndef GREATER_EQ2
-#	define GREATER_EQ2(a1,a2,b1,b2) ( (a1)>(b1) || ( (a1)==(b1) && (a2)>=(b2) )) // a1.a2>=b1.b2
-#endif
+#include "const.h" // for GREATER_EQ2
 
 // attribute options for GCC compilers (Intel compiler may also recognize them)
 #ifdef __GNUC__

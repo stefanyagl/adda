@@ -1,6 +1,8 @@
-/* Definitions of various structures
+/* File: types.h
+ * $Date::                            $
+ * Descr: definitions of various structures
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006-2010,2012-2013 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as

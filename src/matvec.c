@@ -1,7 +1,9 @@
-/* Calculate local matrix vector product of decomposed interaction matrix with r_k or p_k, using a FFT-based convolution
- * algorithm. Also contains code for SPARSE (non-FFT) mode.
+/* File: matvec.c
+ * $Date::                            $
+ * Descr: calculate local matrix vector product of decomposed interaction matrix with r_k or p_k, using a FFT-based
+ *        convolution algorithm. Also contains code for SPARSE (non-FFT) mode.
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006-2013 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -148,6 +150,7 @@ void MatVec (doublecomplex * restrict argvec,    // the argument vector
 		Timing_Mult3,Timing_Mult4,Timing_Mult5,Timing_BTf,Timing_BTb,Timing_TYZf,Timing_TYZb,Timing_ipr;
 	double t_FFTXf,t_FFTYf,t_FFTZf,t_FFTXb,t_FFTYb,t_FFTZb,t_Mult1,t_Mult2,t_Mult3,t_Mult4,t_Mult5,t_ipr,t_BTf,t_BTb,
 		t_TYZf,t_TYZb,t_Arithm,t_FFT,t_Comm;
+
 #endif
 
 	/* A = I + S.D.S
@@ -412,7 +415,7 @@ void MatVec (doublecomplex * restrict argvec,    // the argument vector
 			"InProd = "FFORMPT"\n\n",
 			t_Mult1,t_Arithm,t_FFTXf,t_FFT,t_BTf,t_Comm,t_Mult2,t_FFTZf,DiffSystemTime(tvp,tvp+17),t_TYZf,t_FFTYf,
 			t_Mult3,t_FFTYb,t_TYZb,t_FFTZb,t_Mult4,t_BTb,t_FFTXb,t_Mult5,t_ipr);
-		PRINTFB("\nPrecise timing is complete. Finishing execution.\n");
+		printf("\nPrecise timing is complete. Finishing execution.\n");
 	}
 	FreeEverything();
 	Stop(EXIT_SUCCESS);

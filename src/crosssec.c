@@ -1,7 +1,9 @@
-/* All the functions to calculate scattering quantities (except Mueller matrix), to read different parameters from
- * files, and to initialize orientation of the particle
+/* FILE : crosssec.c
+ * $Date::                            $
+ * Descr: all the functions to calculate scattering quantities (except Mueller matrix); to read different parameters
+ *        from files; and initialize orientation of the particle
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006-2014 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -59,7 +61,7 @@ Parms_1D parms_alpha; // parameters of integration over alpha
 Parms_1D parms[2];    // parameters for integration over theta,phi or beta,gamma
 angle_set beta_int,gamma_int,theta_int,phi_int; // sets of angles
 // used in param.c
-const char *avg_string; // string for output of function that reads averaging parameters
+char avg_string[MAX_PARAGRAPH]; // string for output of function that reads averaging parameters
 // used in Romberg.c
 bool full_al_range; // whether full range of alpha angle is used
 
@@ -80,8 +82,7 @@ static inline int AlldirIndex(const int theta,const int phi)
 void InitRotation (void)
 /* initialize matrices used for reference frame transformation; based on Mishchenko M.I. "Calculation of the amplitude
  * matrix for a nonspherical particle in a fixed orientation", Applied Optics 39(6):1026-1031. This is so-called
- * zyz-notation or y-convention. Instead of rotating the particle (active rotation) we rotate everything else (passive).
- * Then the beta_matr is the transpose of the active one.
+ * zyz-notation or y-convention.
  */
 {
 	double ca,sa,cb,sb,cg,sg;
@@ -373,7 +374,7 @@ void ReadAvgParms(const char * restrict fname)
 	// close file
 	FCloseErr(input,fname,ALL_POS);
 	// print info to string
-	if (IFROOT) avg_string=dyn_sprintf(
+	if (IFROOT) SnprintfErr(ONE_POS,avg_string,MAX_PARAGRAPH,
 		"alpha: from "GFORMDEF" to "GFORMDEF" in %zu steps\n"
 		"beta: from "GFORMDEF" to "GFORMDEF" in (up to) %zu steps (equally spaced in cosine "
 			"values)\n"
@@ -501,22 +502,6 @@ void ReadScatGridParms(const char * restrict fname)
 }
 
 //======================================================================================================================
-static inline double eta2(const double n[static restrict 3])
-/* calculates IGT_SO correction for scattering at direction n. Exact formula is based on integration of exp(ikn.r) over
- * the dipole volume, resulting in Product(sinc(kd[mu]*n[mu]/2),mu). But here we use a second-order approximation
- */
-{
-	return 1-(kdX*kdX*n[0]*n[0]+kdY*kdY*n[1]*n[1]+kdZ*kdZ*n[2]*n[2])/24;
-}
-
-//======================================================================================================================
-static inline double eta2cmplx(const doublecomplex n[static restrict 3])
-// same as eta2, but for complex input vector
-{
-	return 1-(kdX*kdX*n[0]*n[0]+kdY*kdY*n[1]*n[1]+kdZ*kdZ*n[2]*n[2])/24;
-}
-
-//======================================================================================================================
 
 static void CalcFieldFree(doublecomplex ebuff[static restrict 3], // where to write calculated scattering amplitude
                           const double n[static restrict 3])      // scattering direction
@@ -541,7 +526,7 @@ static void CalcFieldFree(doublecomplex ebuff[static restrict 3], // where to wr
 
 	if (ScatRelation==SQ_SO) {
 		// !!! this should never happen
-		if (anisotropy || rectDip) LogError(ONE_POS,"Incompatibility error in CalcField");
+		if (anisotropy) LogError(ONE_POS,"Incompatibility error in CalcField");
 		// calculate correction coefficient
 		if (scat_avg) na=0;
 		else na=DotProd(n,prop);
@@ -552,9 +537,9 @@ static void CalcFieldFree(doublecomplex ebuff[static restrict 3], // where to wr
 	cvInit(sum);
 #ifndef SPARSE
 	// prepare values of exponents, along each of the coordinates
-	imExp_arr(-kdX*n[0],boxX,expsX);
-	imExp_arr(-kdY*n[1],boxY,expsY);
-	imExp_arr(-kdZ*n[2],local_Nz_unif,expsZ);
+	imExp_arr(-kd*n[0]*rectScaleX,boxX,expsX);
+	imExp_arr(-kd*n[1]*rectScaleY,boxY,expsY);
+	imExp_arr(-kd*n[2]*rectScaleZ,local_Nz_unif,expsZ);
 #endif // !SPARSE
 	/* this piece of code tries to use that usually only x position changes from dipole to dipole, saving a complex
 	 * multiplication seems to be beneficial, even considering bookkeeping overhead; it may not be as good for very
@@ -578,11 +563,11 @@ static void CalcFieldFree(doublecomplex ebuff[static restrict 3], // where to wr
 		}
 		a=tmp*expsX[ix];
 #else // sparse mode - the difference is that exponents are not precomputed
-			expY=imExp(-kdY*n[1]*iy2);
-			expZ=imExp(-kdZ*n[2]*iz2);
+			expY=imExp(-kd*n[1]*iy2*rectScaleY);
+			expZ=imExp(-kd*n[2]*iz2*rectScaleZ);
 			tmp=expY*expZ;
 		}
-		expX=imExp(-kdX*n[0]*ix);
+		expX=imExp(-kd*n[0]*ix*rectScaleX);
 		a=tmp*expX;
 #endif // SPARSE
 		/* the following line may incur certain overhead (from 0% to 5% depending on tests).
@@ -604,7 +589,7 @@ static void CalcFieldFree(doublecomplex ebuff[static restrict 3], // where to wr
 	a=imExp(-WaveNum*DotProd(box_origin_unif,n)); // a=exp(-ikr0.n)
 	kkk=WaveNum*WaveNum*WaveNum;
 	// the following additional multiplier implements IGT_SO
-	if (ScatRelation==SQ_IGT_SO) kkk*=eta2(n);
+	if (ScatRelation==SQ_IGT_SO) kkk*=(1-kd*kd/24);
 	tmp=-I*a*kkk; // tmp=(-i*k^3)*exp(-ikr0.n)
 	cvMultScal_cmplx(tmp,tbuff,ebuff);
 }
@@ -708,9 +693,9 @@ static void CalcFieldSurf(doublecomplex ebuff[static restrict 3], // where to wr
 	}
 #ifndef SPARSE
 	// prepare values of exponents, along each of the coordinates
-	imExp_arr(-kdX*nN[0],boxX,expsX);
-	imExp_arr(-kdY*nN[1],boxY,expsY);
-	imExp_arr(-kdZ*nN[2],local_Nz_unif,expsZ);
+	imExp_arr(-kd*nN[0]*rectScaleX,boxX,expsX);
+	imExp_arr(-kd*nN[1]*rectScaleY,boxY,expsY);
+	imExp_arr(-kd*nN[2]*rectScaleZ,local_Nz_unif,expsZ);
 #endif // !SPARSE
 	/* this piece of code tries to use that usually only x position changes from dipole to dipole, saving a complex
 	 * multiplication seems to be beneficial, even considering bookkeeping overhead; it may not be as good for very
@@ -736,12 +721,12 @@ static void CalcFieldSurf(doublecomplex ebuff[static restrict 3], // where to wr
 		aN=tmpN*expsX[ix];
 		aF=tmpF*expsX[ix];
 #else // sparse mode - the difference is that exponents are not precomputed; cexp is used since argument can be complex
-			expY=cexp(-I*kdY*nN[1]*iy2);
-			expZ=cexp(-I*kdZ*nN[2]*iz2);
+			expY=cexp(-I*kd*nN[1]*iy2*rectScaleY);
+			expZ=cexp(-I*kd*nN[2]*iz2*rectScaleZ);
 			tmpN=expY*expZ;
 			tmpF=expY*conj(expZ);
 		}
-		expX=cexp(-I*kdX*nN[0]*ix);
+		expX=cexp(-I*kd*nN[0]*ix*rectScaleX);
 		aN=tmpN*expX;
 		aF=tmpF*expX;
 #endif // SPARSE
@@ -766,11 +751,11 @@ static void CalcFieldSurf(doublecomplex ebuff[static restrict 3], // where to wr
 		}
 		aN=tmpN*expsX[ix];
 #else // sparse mode - the difference is that exponents are not precomputed; cexp is used since argument can be complex
-			expY=cexp(-I*kdY*nN[1]*iy2);
-			expZ=cexp(-I*kdZ*nN[2]*iz2);
+			expY=cexp(-I*kd*nN[1]*iy2*rectScaleY);
+			expZ=cexp(-I*kd*nN[2]*iz2*rectScaleZ);
 			tmpN=expY*expZ;
 		}
-		expX=cexp(-I*kdX*nN[0]*ix);
+		expX=cexp(-I*kd*nN[0]*ix*rectScaleX);
 		aN=tmpN*expX;
 #endif // SPARSE
 		// sum(P*exp(-ik*r.nN))
@@ -806,8 +791,8 @@ static void CalcFieldSurf(doublecomplex ebuff[static restrict 3], // where to wr
 	// ebuff=(-i*k^3)*exp(-ikr0.n)*tbuff, where r0=box_origin_unif
 	// All m-scaling for substrate has been accounted in phSh above
 	doublecomplex sc=-I*WaveNum*WaveNum*WaveNum*cexp(-I*WaveNum*crDotProd(nN,box_origin_unif));
-	// the following additional multiplier implements IGT_SO; when above, it is the same for nF and nN
-	if (ScatRelation==SQ_IGT_SO) sc*=eta2cmplx(nN);
+	// the following additional multiplier implements IGT_SO
+	if (ScatRelation==SQ_IGT_SO) sc*=(1-kd*kd/24);
 	cvMultScal_cmplx(sc,ebuff,ebuff);
 }
 
@@ -845,14 +830,14 @@ double ExtCross(const double * restrict incPol)
 		for (i=0;i<local_nvoid_Ndip;++i) sum+=cDotProd_Im(pvec+3*i,Einc+3*i); // sum{Im(P.E_inc*)}
 		MyInnerProduct(&sum,double_type,1,&Timing_ScatQuanComm);
 		sum*=FOUR_PI*WaveNum;
-		/* For cubical dipoles the following satisfies IGT_SO, because this factor is applied in CalcField() and is
-		 * independent of propagation or scattering direction. For rectangular dipoles, it is only approximate but
-		 * expected to be accurate for not very elongated dipoles and/or not very spread out incident field.
+		/* Surprisingly, this little trick is enough to satisfy IGT_SO, because this factor is applied in CalcField()
+		 * and is independent of propagation or scattering direction. Thus it can be applied to any linear combination
+		 * of plane waves, i.e. any field.
 		 *
-		 * In principle, the situation is similar for SO of full IGT, but there the correction factor depends on the
-		 * propagation direction.even for cubical dipoles
+		 * Unfortunately, the same reasoning fails for SO of full IGT, because there the correction factor does
+		 * (slightly) depend on the propagation direction.
 		 */
-		if (ScatRelation==SQ_IGT_SO) sum*=eta2(prop);
+		if (ScatRelation==SQ_IGT_SO) sum*=(1-kd*kd/24);
 	}
 	/* TO ADD NEW BEAM
 	 * The formulae above works only if the amplitude of the beam is unity at the focal point. Either make sure that new
@@ -912,7 +897,7 @@ double AbsCross(void)
 			break;
 		case SQ_SO:
 			// !!! the following should never happen
-			if (anisotropy || rectDip) LogError(ONE_POS,"Incompatibility error in AbsCross");
+			if (anisotropy) LogError(ONE_POS,"Incompatibility error in AbsCross");
 			// calculate mult1
 			temp1=kd*kd/6;
 			temp2=FOUR_PI/dipvol;
@@ -1015,7 +1000,7 @@ void CalcAlldir(void)
 	// Calculate field
 	tstart = GET_TIME();
 	npoints = theta_int.N*phi_int.N;
-	if (IFROOT) PRINTFB("Calculating scattered field for the whole solid angle:\n");
+	if (IFROOT) printf("Calculating scattered field for the whole solid angle:\n");
 	for (i=0,point=0;i<theta_int.N;++i) {
 		th=Deg2Rad(theta_int.val[i]);
 		cthet=cos(th);
@@ -1042,7 +1027,7 @@ void CalcAlldir(void)
 			E_ad[index+1]=crDotProd(ebuff,incPolpar);
 			point++;
 			// show progress
-			if (((10*point)%npoints)<10 && IFROOT) PRINTFB(" %d%%",100*point/npoints);
+			if (((10*point)%npoints)<10 && IFROOT) printf(" %d%%",100*point/npoints);
 		}
 	}
 	// accumulate fields
@@ -1059,7 +1044,7 @@ void CalcAlldir(void)
 		for (i=0;i<theta_int.N;++i) if (TestBelowDeg(theta_int.val[i]))
 			for (j=0,point=phi_int.N*i;j<phi_int.N;j++,point++) E2_alldir[point]*=scale;
 	}
-	if (IFROOT) PRINTFB("  done\n");
+	if (IFROOT) printf("  done\n");
 	// timing
 	Timing_EFieldAD = GET_TIME() - tstart;
 	Timing_EField += Timing_EFieldAD;
@@ -1084,7 +1069,7 @@ void CalcScatGrid(const enum incpol which)
 	// set type of cycling through angles
 	if (angles.type==SG_GRID) n=angles.phi.N;
 	else n=1; // angles.type==SG_PAIRS
-	if (IFROOT) PRINTFB("Calculating grid of scattered field:\n");
+	if (IFROOT) printf("Calculating grid of scattered field:\n");
 	// main cycle
 	for (i=0,point=0;i<angles.theta.N;++i) {
 		th=Deg2Rad(angles.theta.val[i]);
@@ -1105,12 +1090,12 @@ void CalcScatGrid(const enum incpol which)
 			Egrid[index+1]=crDotProd(ebuff,incPolpar);
 			point++;
 			// show progress; the value is always from 0 to 100, so conversion to int is safe
-			if (((10*point)%angles.N)<10 && IFROOT) PRINTFB(" %d%%",(int)(100*point/angles.N));
+			if (((10*point)%angles.N)<10 && IFROOT) printf(" %d%%",(int)(100*point/angles.N));
 		}
 	}
 	// accumulate fields; timing
 	Accumulate(Egrid,cmplx_type,2*angles.N,&Timing_EFieldSGComm);
-	if (IFROOT) PRINTFB("  done\n");
+	if (IFROOT) printf("  done\n");
 	Timing_EFieldSG = GET_TIME() - tstart;
 	Timing_EField += Timing_EFieldSG;
 }

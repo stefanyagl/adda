@@ -1,6 +1,8 @@
-/* Definitions for debug functions
+/* File: debug.h
+ * $Date::                            $
+ * Descr: definitions for debug functions
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006,2008-2010,2012-2013 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as

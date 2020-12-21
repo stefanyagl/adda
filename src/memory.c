@@ -1,7 +1,9 @@
-/* Allocation and freeing of different vectors and matrices; checks for 'out of memory' and is resistant to 0 sizes in
- * allocation and NULL in freeing
+/* File: memory.c
+ * $Date::                            $
+ * Descr: allocation and freeing of different vectors and matrices; checks for 'out of memory';
+ *        resistant to 0 sizes in allocation and NULL in freeing
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006-2008,2010,2012-2013 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as

@@ -1,6 +1,8 @@
-/* Definitions for usual timing; should be completely portable
+/* File: timing.h
+ * $Date::                            $
+ * Descr: definitions for usual timing; should be completely portable
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006,2008-2009,2012-2014 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -29,7 +31,6 @@
 #endif
 
 #ifdef WINDOWS
-#	include <windows.h> // all windows functions need this
 #	define SYSTEM_TIME LARGE_INTEGER
 #	define GET_SYSTEM_TIME(t) QueryPerformanceCounter(t)
 #elif defined(POSIX)

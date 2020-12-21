@@ -1,6 +1,8 @@
-/* Kernel file for OpenCL kernels. Includes all subfunctions of the Matvec routine as OpenCL kernels
+/* File: oclkernels.cl
+ * $Date::                            $
+ * Descr: Kernel File for OpenCL kernels. Includes all subfunctions of the Matvec routine as OpenCL kernels
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2010-2014 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as

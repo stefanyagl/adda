@@ -1,9 +1,11 @@
-/* All the global variables are declared here
+/* File: vars.c
+ * $Date::                            $
+ * Descr: all the global variables are declared here
  *
- * 'Global' means used in three or more source files. Variables that are used in only two source files are called
- * 'semi-global' and not listed here. They are defined in one file and referenced with 'extern' in another one.
+ *        'Global' means used in three or more source files. Variables that are used in only two source files are called
+ *        'semi-global' and not listed here. They are defined in one file and referenced with 'extern' in another one.
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006-2014 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -20,12 +22,11 @@
 // basic variables
 int boxX,boxY,boxZ;       // sizes of box enclosing the particle
 size_t boxXY;             // boxX*boxY, used for indexing
-double gridspace;         // =dsX - DEPRECATED, may only be used in parts incompatible with rectDip
-double dsX,dsY,dsZ;       // dipole sizes along each axis
-double rectScaleX,rectScaleY,rectScaleZ; // relative dipole sizes (scales), in many cases are round numbers
+double gridspace;         // dipole size (d)
+double gridSpaceX,gridSpaceY,gridSpaceZ; // dipole sizes
+double rectScaleX,rectScaleY,rectScaleZ, maxRectScale; // relative dipole sizes (scales) and maximal one
 double dipvol;            // dipole volume
-double kd;                // =kdX - DEPRECATED, may only be used in parts incompatible with rectDip
-double kdX,kdY,kdZ;       // kdX=WaveNum*dsX, ...
+double kd;                // k*d=2*PI/dpl
 double ka_eq;             // volume-equivalent size parameter
 double inv_G;             // inverse of equivalent cross section
 double WaveNum;           // wavenumber of incident light

@@ -1,7 +1,8 @@
-# Common part of makefiles for different versions of ADDA
+# Common part of makefiles for different versions of ADDA package
 # All options are defined in Makefile and specific makefiles
+# $Date::                            $
 #
-# Copyright (C) ADDA contributors
+# Copyright (C) 2010-2011,2013 ADDA contributors
 # This file is part of ADDA.
 #
 # ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as

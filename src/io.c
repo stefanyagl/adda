@@ -1,6 +1,8 @@
-/* i/o routines
+/* File: io.c
+ * $Date::                            $
+ * Descr: i/o routines
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006-2013 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -60,7 +62,6 @@ static char *dyn_vsprintf(const char *format, va_list args)
 	if (count>=0) {
 		buffer=(char*)malloc(((size_t)count+1)*sizeof(char));
 		if (buffer==NULL) {
-			fflush(NULL);
 			fprintf(stderr,"ERROR: malloc failed in '%s'",__func__);
 			Stop(EXIT_FAILURE);
 		}
@@ -68,7 +69,6 @@ static char *dyn_vsprintf(const char *format, va_list args)
 	}
 	va_end(copy);
 	if (count<0) {
-		fflush(NULL);
 		fprintf(stderr,"ERROR: Code %d returned by vsnprintf in '%s'",count,__func__);
 		Stop(count);
 	}
@@ -101,7 +101,6 @@ char *rea_vsprintf(char *str,const char *format, va_list args)
 		size_t len=strlen(str);
 		buffer=(char*)realloc(str,((size_t)count+len+1)*sizeof(char));
 		if (buffer==NULL) {
-			fflush(NULL);
 			fprintf(stderr,"ERROR: realloc failed in '%s'",__func__);
 			Stop(EXIT_FAILURE);
 		}
@@ -109,7 +108,6 @@ char *rea_vsprintf(char *str,const char *format, va_list args)
 	}
 	va_end(copy);
 	if (count<0) { // simple error handling, so it can be called from LogError, etc.
-		fflush(NULL);
 		fprintf(stderr,"ERROR: Code %d returned by vsnprintf in '%s'",count,__func__);
 		Stop(count);
 	}
@@ -258,13 +256,13 @@ static void ProcessError(const enum ec code,ERR_LOC_DECL,const char * restrict f
 				else if (code==EC_WARN) strcpy(warn_buf,msg);
 				// write (duplicate) message to stderr, wrapping lines
 				WrapLines(msg);
-				fflush(NULL);
 				fprintf(stderr,"%s",msg);
+				fflush(stderr);
 				break;
 			case EC_INFO: // put message to stdout, wrapping lines
 				WrapLines(msg);
 				printf("%s",msg);
-				fflush(stdout); // mostly needed in parallel mode
+				fflush(stdout);
 				break;
 			case EC_OK: break; // redundant; for a full set of cases
 		}
@@ -388,8 +386,8 @@ void PrintError(const char * restrict fmt, ... )
 		VSNPRINTF_SHIFT_ROBUST(shift,tmp,msg,MAX_MESSAGE,fmt,args);
 		va_end(args);
 		WrapLines(msg);
-		fflush(NULL);
 		fprintf(stderr,"%s\n",msg);
+		fflush(stderr);
 	}
 	// wait for root to generate an error message
 	Synchronize();
@@ -432,7 +430,7 @@ void PrintBoth(FILE * restrict file,const char * restrict fmt, ... )
 	 */
 	VsnprintfErr(ALL_POS,msg,MAX_PARAGRAPH,fmt,args);
 	fprintf(file,"%s",msg);
-	PRINTFB("%s",msg);
+	printf("%s",msg);
 	va_end(args);
 }
 

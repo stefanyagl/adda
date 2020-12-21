@@ -1,6 +1,8 @@
-/* i/o and error handling routines
+/* File: io.h
+ * $Date::                            $
+ * Descr: i/o and error handling routines
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006,2008-2013
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -17,10 +19,8 @@
 
 // project headers
 #include "const.h"    // for enum types
-#include "os.h"       // for awareness of Windows
 #include "function.h" // for function attributes
 // system headers
-#include <stdbool.h> // for bool
 #include <stdio.h>    // for file
 #include <stdarg.h>   // for va_list
 
@@ -52,15 +52,6 @@
 	tmp=vsnprintf(str+shift,size-shift,__VA_ARGS__); \
 	if (tmp>0) { shift+=tmp; if (shift>=size) shift=size-1; } \
 }
-// for Windows we emulate line buffering for each printf call, assuming that one line is one printf call
-#ifdef WINDOWS
-	extern bool emulLinebuf;
-#	define PRINTFB(...) { \
-		printf(__VA_ARGS__); \
-		if (emulLinebuf) fflush(stdout); }
-#else
-#	define PRINTFB(...) printf(__VA_ARGS__);
-#endif
 
 char *dyn_sprintf(const char *format, ...) ATT_PRINTF(1,2) ATT_MALLOC;
 char *rea_sprintf(char *str,const char *format, ...) ATT_PRINTF(2,3) ATT_MALLOC;

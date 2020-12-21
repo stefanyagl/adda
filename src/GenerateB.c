@@ -1,17 +1,19 @@
-/* Generates the incident beam
+/* File: GenerateB.c
+ * $Date::                            $
+ * Descr: generate a incident beam
  *
- * Lminus beam is based on: G. Gouesbet, B. Maheu, G. Grehan, "Light scattering from a sphere arbitrary located
- * in a Gaussian beam, using a Bromwhich formulation", J.Opt.Soc.Am.A 5,1427-1443 (1988).
- * Eq.(22) - complex conjugate.
+ *        Lminus beam is based on: G. Gouesbet, B. Maheu, G. Grehan, "Light scattering from a sphere arbitrary located
+ *        in a Gaussian beam, using a Bromwhich formulation", J.Opt.Soc.Am.A 5,1427-1443 (1988).
+ *        Eq.(22) - complex conjugate.
  *
- * Davis beam is based on: L. W. Davis, "Theory of electromagnetic beams," Phys.Rev.A 19, 1177-1179 (1979).
- * Eqs.(15a),(15b) - complex conjugate; in (15a) "Q" changed to "Q^2" (typo).
+ *        Davis beam is based on: L. W. Davis, "Theory of electromagnetic beams," Phys.Rev.A 19, 1177-1179 (1979).
+ *        Eqs.(15a),(15b) - complex conjugate; in (15a) "Q" changed to "Q^2" (typo).
  *
- * Barton beam is based on: J. P. Barton and D. R. Alexander, "Fifth-order corrected electromagnetic-field components
- * for a fundamental Gaussian-beam," J.Appl.Phys. 66,2800-2802 (1989).
- * Eqs.(25)-(28) - complex conjugate.
+ *        Barton beam is based on: J. P. Barton and D. R. Alexander, "Fifth-order corrected electromagnetic-field
+ *        components for a fundamental Gaussian-beam," J.Appl.Phys. 66,2800-2802 (1989).
+ *        Eqs.(25)-(28) - complex conjugate.
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2006-2014 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -31,7 +33,6 @@
 #include "interaction.h"
 #include "param.h"
 #include "vars.h"
-// system headers
 #include <stdio.h>
 #include <string.h>
 
@@ -43,6 +44,10 @@ extern const double beam_pars[];
 extern const char *beam_fnameY;
 extern const char *beam_fnameX;
 extern const opt_index opt_beam;
+
+extern void bjndd_(int *n, double *x, double *bj, double *dj, double *fj);
+
+
 
 // used in CalculateE.c
 double C0dipole,C0dipole_refl; // inherent cross sections of exciting dipole (in free space and addition due to surface)
@@ -60,7 +65,7 @@ double beam_center_0[3]; // position of the beam center in laboratory reference 
  */
 doublecomplex eIncRefl[3],eIncTran[3];
 // used in param.c
-const char *beam_descr; // string for log file with beam parameters
+char beam_descr[MAX_MESSAGE2]; // string for log file with beam parameters
 
 // LOCAL VARIABLES
 static double s,s2;            // beam confinement factor and its square
@@ -68,6 +73,9 @@ static double scale_x,scale_z; // multipliers for scaling coordinates
 static doublecomplex ki,kt;    // abs of normal components of k_inc/k0, and ktran/k0
 static doublecomplex ktVec[3]; // k_tran/k0
 static double p0;              // amplitude of the incident dipole moment
+static int n0;                 // Bessel beam order
+static double alpha0;          // half-cone angle
+static double hvp[8];		   // Hertz vector potentials' components
 /* TO ADD NEW BEAM
  * Add here all internal variables (beam parameters), which you initialize in InitBeam() and use in GenerateB()
  * afterwards. If you need local, intermediate variables, put them into the beginning of the corresponding function.
@@ -80,17 +88,16 @@ void InitBeam(void)
 // initialize beam; produce description string
 {
 	double w0; // beam width
-	const char *tmp_str; // temporary string
+	int n_par; // for besselGen
 	/* TO ADD NEW BEAM
 	 * Add here all intermediate variables, which are used only inside this function.
 	 */
-
 	// initialization of global option index for error messages
 	opt=opt_beam;
 	// beam initialization
 	switch (beamtype) {
 		case B_PLANE:
-			if (IFROOT) beam_descr="plane wave";
+			if (IFROOT) strcpy(beam_descr,"plane wave");
 			beam_asym=false;
 			if (surface) {
 				if (prop_0[2]==0) PrintError("Ambiguous setting of beam propagating along the surface. Please specify "
@@ -150,7 +157,7 @@ void InitBeam(void)
 			 * (breaking scale invariance)
 			 */
 			p0=1/(WaveNum*WaveNum*WaveNum);
-			if (IFROOT) beam_descr=dyn_sprintf("point dipole at "GFORMDEF3V,COMP3V(beam_center_0));
+			if (IFROOT) sprintf(beam_descr,"point dipole at "GFORMDEF3V,COMP3V(beam_center_0));
 			return;
 		case B_LMINUS:
 		case B_DAVIS3:
@@ -168,21 +175,74 @@ void InitBeam(void)
 			scale_z=s*scale_x; // 1/(k*w0^2)
 			// beam info
 			if (IFROOT) {
+				strcpy(beam_descr,"Gaussian beam (");
 				switch (beamtype) {
 					case B_LMINUS:
-						tmp_str="L- approximation";
+						strcat(beam_descr,"L- approximation)\n");
 						break;
 					case B_DAVIS3:
-						tmp_str="3rd order approximation, by Davis";
+						strcat(beam_descr,"3rd order approximation, by Davis)\n");
 						break;
 					case B_BARTON5:
-						tmp_str="5th order approximation, by Barton";
+						strcat(beam_descr,"5th order approximation, by Barton)\n");
 						break;
-					default: LogError(ONE_POS,"Incompatibility error in GenerateB");
+					default: break;
 				}
-				beam_descr=dyn_sprintf("Gaussian beam (%s)\n"
-				                       "\tWidth="GFORMDEF" (confinement factor s="GFORMDEF")\n"
-				                       "\tCenter position: "GFORMDEF3V,tmp_str,w0,s,COMP3V(beam_center_0));
+				sprintf(beam_descr+strlen(beam_descr),"\tWidth="GFORMDEF" (confinement factor s="GFORMDEF")\n"
+				                                      "\tCenter position: "GFORMDEF3V,w0,s,COMP3V(beam_center_0));
+			}
+			return;
+		case B_BESSELASD:
+		case B_BESSELCS:
+		case B_BESSELGEN:
+		case B_BESSELLE:
+		case B_BESSELLM:
+		case B_BESSELTEC:
+		case B_BESSELTMC:
+			if (surface) PrintError("Currently, Bessel incident beam is not supported for '-surf'");
+			// initialize parameters
+			if (beamtype==B_BESSELGEN) {
+				n_par = 8;
+				hvp[0] = beam_pars[0]; hvp[1] = beam_pars[1];
+				hvp[2] = beam_pars[2]; hvp[3] = beam_pars[3];
+				hvp[4] = beam_pars[4]; hvp[5] = beam_pars[5];
+				hvp[6] = beam_pars[6]; hvp[7] = beam_pars[7];
+			}
+			else n_par = 0;
+			n0=round(beam_pars[0 + n_par]);
+			alpha0 = beam_pars[1 + n_par];
+			vCopy(beam_pars+2 + n_par,beam_center_0);
+			beam_asym=(beam_Npars==(5 + n_par) && (beam_center_0[0]!=0 || beam_center_0[1]!=0 || beam_center_0[2]!=0));
+			symR=symX=symY=symZ=FALSE;
+			if (!beam_asym) vInit(beam_center);
+			if (IFROOT) {
+				strcpy(beam_descr,"Bessel beam (");
+				switch (beamtype) {
+					case B_BESSELASD:
+						strcat(beam_descr,"angular spectrum decomposition)\n");
+						break;
+					case B_BESSELCS:
+						strcat(beam_descr,"circularly symmetric energy density)\n");
+						break;
+					case B_BESSELGEN:
+						strcat(beam_descr,"generalized)\n");
+						break;
+					case B_BESSELLE:
+						strcat(beam_descr,"linear electric field)\n");
+						break;
+					case B_BESSELLM:
+						strcat(beam_descr,"linear magnetic field)\n");
+						break;
+					case B_BESSELTEC:
+						strcat(beam_descr,"forming the TE Bessel beam)\n");
+						break;
+					case B_BESSELTMC:
+						strcat(beam_descr,"forming the TM Bessel beam)\n");
+						break;
+					default: break;
+				}
+				sprintf(beam_descr+strlen(beam_descr),"\tOrder=""%d""\n\t""Half-cone angle: "GFORMDEF"\n"
+				                                      "\tCenter position: "GFORMDEF3V,n0,alpha0,COMP3V(beam_center_0));
 			}
 			return;
 		case B_READ:
@@ -190,8 +250,8 @@ void InitBeam(void)
 			symX=symY=symZ=symR=false;
 			if (surface) inc_scale=1; // since we can't know it, we assume the default case
 			if (IFROOT) {
-				if (beam_Npars==1) beam_descr=dyn_sprintf("specified by file '%s'",beam_fnameY);
-				else beam_descr=dyn_sprintf("specified by files '%s' and '%s'",beam_fnameY,beam_fnameX);
+				if (beam_Npars==1) sprintf(beam_descr,"specified by file '%s'",beam_fnameY);
+				else sprintf(beam_descr,"specified by files '%s' and '%s'",beam_fnameY,beam_fnameX);
 			}
 			// we do not define beam_asym here, because beam_center is not defined anyway
 			return;
@@ -222,6 +282,14 @@ void InitBeam(void)
 }
 
 //======================================================================================================================
+void Fpw(doublecomplex *F,int l,doublecomplex k,double r0,double tht0, double phi0, double alph, double bet)
+{
+	doublecomplex fexp = cexp(I*l*bet + I*k*r0*(sin(alph)*sin(tht0)*cos(bet-phi0)+cos(alph)*cos(tht0)));
+	*F = (cos(alph)*cos(bet)*cos(bet)+sin(bet)*sin(bet))*fexp;
+	*(F+1) = -(1-cos(alph))*sin(bet)*cos(bet)*fexp;
+	*(F+2) = -sin(alph)*cos(bet)*fexp;
+}
+
 
 void GenerateB (const enum incpol which,   // x - or y polarized incident light
                 doublecomplex *restrict b) // the b vector for the incident field
@@ -229,13 +297,15 @@ void GenerateB (const enum incpol which,   // x - or y polarized incident light
 {
 	size_t i,j;
 	doublecomplex psi0,Q,Q2;
-	doublecomplex v1[3],v2[3],v3[3],gt[6];
-	double ro2,ro4;
-	double x,y,z,x2_s,xy_s;
+	doublecomplex v1[3],v2[3],v3[3],gt[6],fint[3],sum[3];
+	double ro,ro2,ro4,r;
+	double x,y,z,x2_s,xy_s,tht,phi,arg,td1[n0+2],td2[n0+2],jn1[n0+2],p[4][2],db;
 	doublecomplex t1,t2,t3,t4,t5,t6,t7,t8,ctemp;
 	const double *ex; // coordinate axis of the beam reference frame
 	double ey[3];
 	double r1[3];
+	double jn2[2]; // for Bessel functions on n and n+1 orders
+	int n1,it,N;
 	const char *fname;
 	/* TO ADD NEW BEAM
 	 * Add here all intermediate variables, which are used only inside this function. You may as well use 't1'-'t8'
@@ -291,10 +361,7 @@ void GenerateB (const enum incpol which,   // x - or y polarized incident light
 					// determine amplitude of the reflected and transmitted waves
 					if (which==INCPOL_Y) { // s-polarized
 						cvBuildRe(ex,eIncRefl);
-						if (msubInf) {
-							rc=-1;
-							tc=0; // to remove compiler warnings
-						}
+						if (msubInf) rc=-1;
 						else {
 							cvBuildRe(ex,eIncTran);
 							rc=FresnelRS(ki,kt);
@@ -303,10 +370,7 @@ void GenerateB (const enum incpol which,   // x - or y polarized incident light
 					}
 					else { // p-polarized
 						vInvRefl_cr(ex,eIncRefl);
-						if (msubInf) {
-							rc=1;
-							tc=0; // to remove compiler warnings
-						}
+						if (msubInf) rc=1;
 						else {
 							crCrossProd(ey,ktVec,eIncTran);
 							cvMultScal_cmplx(1/msub,eIncTran,eIncTran); // normalize eIncTran by ||ktVec||=msub
@@ -391,12 +455,7 @@ void GenerateB (const enum incpol which,   // x - or y polarized incident light
 				// the following logic (if-else-if...) is hard to replace by a simple switch
 				if (beamtype==B_LMINUS) cvMultScal_RVec(ctemp,ex,b+j); // b[i]=ctemp*ex
 				else {
-					/* It is possible to rewrite the formulae below to avoid division by ro2, but we prefer
-					 * dimensionless variables. The value for ro2=0 doesn't really matter (cancels afterwards).
-					 * The current code should work OK even for very small ro2
-					 */
-					if (ro2==0) x2_s=0;
-					else x2_s=x*x/ro2;
+					x2_s=x*x/ro2;
 					Q2=Q*Q;
 					ro4=ro2*ro2;
 					// some combinations that are used more than once
@@ -413,8 +472,7 @@ void GenerateB (const enum incpol which,   // x - or y polarized incident light
 						t3 = 2*t7*(-1 + I*Q*s2*(-4*t5+t6-2));
 					}
 					else if (beamtype==B_BARTON5) {
-						if (ro2==0) xy_s=0; // see comment for x2_s above
-						else xy_s=x*y/ro2;
+						xy_s=x*y/ro2;
 						t8=8+2*t5; // t8=8+2i*Q*ro^2
 						/* t1 = 1 + s^2(-ro^2*Q^2-i*ro^4*Q^3-2Q^2*x^2)
 						 *    + s^4[2ro^4*Q^4+3iro^6*Q^5-0.5ro^8*Q^6+x^2(8ro^2*Q^4+2iro^4*Q^5)]
@@ -436,6 +494,190 @@ void GenerateB (const enum incpol which,   // x - or y polarized incident light
 					cvAdd2Self(v1,v2,v3);
 					cvMultScal_cmplx(ctemp,v1,b+j);
 				}
+			}
+			return;
+		case B_BESSELASD:
+			for (i=0;i<local_nvoid_Ndip;i++) {
+				j=3*i;
+				LinComb(DipoleCoord+j,beam_center,1,-1,r1);
+				x=DotProd(r1,ex);
+				y=DotProd(r1,ey);
+				z=DotProd(r1,prop);
+				r=sqrt(x*x+y*y+z*z);	// radial distance in a spherical coordinate system
+				tht=atan2(sqrt(x*x+y*y),z);	// polar angle
+				phi=atan2(y,x);			// azimuthal angle
+
+				// Integration
+				N=1000;
+				db=2.*PI/N;
+
+				Fpw(fint,n0,WaveNum,r,tht,phi,alpha0,0);
+				sum[0] = fint[0];	sum[1] = fint[1];	sum[2] = fint[2];
+
+				for (it=1;it<N;it++) {
+					Fpw(fint,n0,WaveNum,r,tht,phi,alpha0,it*db);
+					sum[0] += fint[0];
+					sum[1] += fint[1];
+					sum[2] += fint[2];
+				}
+
+				t3=sum[0]/N;	t4=sum[1]/N;	t5=sum[2]/N;
+
+				///printf("\n i: %d \t %g\t %g\t %g\t %g\t %g\t %g",i,creal(t3),cimag(t3),creal(t4),cimag(t4),creal(t5),cimag(t5));
+
+				cvMultScal_RVec(t3,ex,v1);
+				cvMultScal_RVec(t4,ey,v2);
+				cvMultScal_RVec(t5,prop,v3);
+				cvAdd2Self(v1,v2,v3);
+				cvMultScal_cmplx(1.,v1,b+j);
+			}
+			return;
+		case B_BESSELCS:
+		case B_BESSELGEN:
+		case B_BESSELLE:
+		case B_BESSELLM:
+		case B_BESSELTEC:
+		case B_BESSELTMC:
+			t1=WaveNum*sin(alpha0);
+			t2=WaveNum*cos(alpha0);
+
+			for (i=0;i<local_nvoid_Ndip;i++) {
+				j=3*i;
+				LinComb(DipoleCoord+j,beam_center,1,-1,r1);
+				x=DotProd(r1,ex);
+				y=DotProd(r1,ey);
+				z=DotProd(r1,prop);
+				ro2=x*x+y*y;
+				ro=sqrt(ro2);	// radial distance in a cylindrical coordinate system
+				phi=atan2(y,x);	// angular coordinate in a cylindrical coordinate system
+				// common factor
+				ctemp=cpow(I,n0)*cexp(I*n0*phi)*cexp(I*t2*z)/WaveNum/WaveNum;
+				arg=ro*t1;
+				if (arg<ROUND_ERR){
+					if (n0 == 0) jn2[0]=1.0;
+					else jn2[0]=0.0;
+					jn2[1]=0.0;
+				}
+				else {
+					n1=n0+1;
+					bjndd_(&n1, &arg, jn1, td1, td2);
+					jn2[0]=jn1[n0];
+					jn2[1]=jn1[n0+1];
+				}
+				switch (beamtype) {
+					case B_BESSELCS:
+						p[0][0]=0.50; p[0][1]=0;		p[1][0]=0; p[1][1]=0;
+						p[2][0]=0; p[2][1]=0; 		p[3][0]=0.5; p[3][1]=0;
+						break;
+					case B_BESSELGEN:
+						p[0][0]=0.5; p[0][1]=0;		p[1][0]=0; p[1][1]=0;
+						p[2][0]=0; p[2][1]=0; 		p[3][0]=0.5; p[3][1]=0;
+						break;
+					case B_BESSELLE:
+						p[0][0]=0; p[0][1]=0;	p[1][0]=0; p[1][1]=0;
+						p[2][0]=0; p[2][1]=0; 	p[3][0]=1.; p[3][1]=0;
+						break;
+					case B_BESSELLM:
+						p[0][0]=0; p[0][1]=0;	p[1][0]=-1.; p[1][1]=0;
+						p[2][0]=0; p[2][1]=0; 	p[3][0]=0; p[3][1]=0;
+						break;
+					case B_BESSELTEC:
+						p[0][0]=0; p[0][1]=0; 	p[1][0]=1./sin(alpha0); p[1][1]=0;
+						p[2][0]=0; p[2][1]=0; 	p[3][0]=0; p[3][1]=1./tan(alpha0);
+						break;
+					case B_BESSELTMC:
+						p[0][0]=0; p[0][1]=0; 	p[1][0]=0; p[1][1]=1./tan(alpha0);
+						p[2][0]=0; p[2][1]=0; 	p[3][0]=-1./sin(alpha0); p[3][1]=0;
+						break;
+					default: break;
+				}
+				t3 = 0; t4 = 0; t5 = 0;
+				if (ro<=ROUND_ERR) {
+					if ((fabs(p[0][0])>=ROUND_ERR) || (fabs(p[0][1])>=ROUND_ERR)) {		//Pex - LMy
+						t3 += (p[0][0]+I*p[0][1])*0.25*(
+								jn2[0]*(cpow(WaveNum,2)*(3+cos(2*alpha0)-2*cos(2*phi)*pow(sin(alpha0),2))));
+						t4 += (p[0][0]+I*p[0][1])*(
+								jn2[0]/4.*(sin(2*phi)*(-2*cpow(WaveNum,2)*pow(sin(alpha0),2))));
+						t5 += (p[0][0]+I*p[0][1])*t2*I*(
+								 n0*cexp(-I*phi));
+					}
+					if ((fabs(p[1][0])>=ROUND_ERR) || (fabs(p[1][1])>=ROUND_ERR)) {		//Pey - LMx
+						t3 += -(p[1][0]+I*p[1][1])*(
+								jn2[0]*0.5*sin(2*phi)*cpow(WaveNum,2)*pow(sin(alpha0),2));
+						t4 += -(p[1][0]+I*p[1][1])*( -
+								jn2[0]*(pow(cos(phi),2)*(cpow(WaveNum,2)) +
+									pow(sin(phi),2)*cpow(WaveNum,2)*pow(cos(alpha0),2)));
+						t5 += -(p[1][0]+I*p[1][1])*t2*(
+								n0*cexp(-I*phi));
+					}
+					if ((fabs(p[2][0])>=ROUND_ERR) || (fabs(p[2][1])>=ROUND_ERR)) { 	//Pmx - LEy
+						t3 += 0;
+						t4 += -(p[2][0]+I*p[2][1])*jn2[0]*t2*WaveNum;
+						t5 += -(p[2][0]+I*p[2][1])*WaveNum*(
+								-jn2[1]*I*t1*sin(phi) -
+								n0*cexp(-I*phi));
+					}
+					if ((fabs(p[3][0])>=ROUND_ERR) || (fabs(p[3][1])>=ROUND_ERR)) {		//Pmy - LEx
+						t3 += (p[3][0]+I*p[3][1])*jn2[0]*t2*WaveNum;
+						t4 += 0;
+						t5 += (p[3][0]+I*p[3][1])*WaveNum*I*(
+								-jn2[1]*t1*cos(phi) +
+								n0*cexp(-I*phi));
+					}
+				}
+				else {
+					if ((fabs(p[0][0])>=ROUND_ERR) || (fabs(p[0][1])>=ROUND_ERR)) {		//Pex - LMy
+						t3 += (p[0][0]+I*p[0][1])*0.25*(
+								jn2[1]*4.*t1/ro*(cos(2*phi)+I*n0*sin(2*phi)) +
+								jn2[0]*(4.*(n0-1)*n0/ro2*cexp(-2*I*phi) +
+										cpow(WaveNum,2)*(3+cos(2*alpha0)-2*cos(2*phi)*pow(sin(alpha0),2))));
+						t4 += (p[0][0]+I*p[0][1])*(
+								jn2[1]*t1/ro*(-I*n0*cos(2*phi)+sin(2*phi)) +
+								jn2[0]/4./ro2*(4.*I*(n0-1)*n0*cos(2*phi) + sin(2*phi)*(4*(n0-1)*n0 -
+									2*cpow(WaveNum*ro,2)*pow(sin(alpha0),2))));
+						t5 += (p[0][0]+I*p[0][1])*t2*I*(
+								-jn2[1]*t1*cos(phi) +
+								 jn2[0]/ro*n0*cexp(-I*phi));
+					}
+					if ((fabs(p[1][0])>=ROUND_ERR) || (fabs(p[1][1])>=ROUND_ERR)) {		//Pey - LMx
+						t3 += -(p[1][0]+I*p[1][1])*(
+								jn2[1]*t1/ro*(I*n0*cos(2*phi)-sin(2*phi)) +
+								jn2[0]/ro2*(-I*(n0-1)*n0*pow(cos(phi),2)+0.5*sin(2*phi)*(-2*(n0-1)*n0 +
+								cpow(WaveNum*ro,2)*pow(sin(alpha0),2)) + I*(n0-1)*n0*pow(sin(phi),2)));
+						t4 += -(p[1][0]+I*p[1][1])*(
+								jn2[1]*t1/ro*(cos(2*phi)+I*n0*sin(2*phi)) -
+								jn2[0]*(pow(cos(phi),2)*(-(n0-1)*n0/ro2 + cpow(WaveNum,2)) +
+									pow(sin(phi),2)*((n0-1)*n0/ro2 + cpow(WaveNum,2)*pow(cos(alpha0),2)) +
+									I*(n0-1)*n0/ro2*sin(2*phi)));
+						t5 += -(p[1][0]+I*p[1][1])*t2*(
+								jn2[1]*I*t1*sin(phi) +
+								jn2[0]/ro*n0*cexp(-I*phi));
+					}
+					if ((fabs(p[2][0])>=ROUND_ERR) || (fabs(p[2][1])>=ROUND_ERR)) { 	//Pmx - LEy
+						t3 += 0;
+						t4 += -(p[2][0]+I*p[2][1])*jn2[0]*t2*WaveNum;
+						t5 += -(p[2][0]+I*p[2][1])*WaveNum*(
+								-jn2[1]*I*t1*sin(phi) -
+								 jn2[0]*cexp(-I*phi)/ro*n0);
+					}
+					if ((fabs(p[3][0])>=ROUND_ERR) || (fabs(p[3][1])>=ROUND_ERR)) {		//Pmy - LEx
+						t3 += (p[3][0]+I*p[3][1])*jn2[0]*t2*WaveNum;
+						t4 += 0;
+						t5 += (p[3][0]+I*p[3][1])*WaveNum*I*(
+								-jn2[1]*t1*cos(phi) +
+								 jn2[0]*cexp(-I*phi)/ro*n0);
+					}
+				}
+
+
+				///printf("\n i: %d \t %g\t %g\t %g\t %g\t %g\t %g",i,creal(t3),cimag(t3),creal(t4),cimag(t4),creal(t5),cimag(t5));
+
+
+				cvMultScal_RVec(t3,ex,v1);
+				cvMultScal_RVec(t4,ey,v2);
+				cvMultScal_RVec(t5,prop,v3);
+				cvAdd2Self(v1,v2,v3);
+				cvMultScal_cmplx(ctemp,v1,b+j);
 			}
 			return;
 		case B_READ:

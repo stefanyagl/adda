@@ -1,6 +1,8 @@
-/* Parallel basics; includes necessary headers and checks version of the standard.
+/* File: parbas.h
+ * $Date::                            $
+ * Descr: parallel basics; includes necessary headers and checks version of the standard.
  *
- * Copyright (C) ADDA contributors
+ * Copyright (C) 2007-2010,2013-2014 ADDA contributors
  * This file is part of ADDA.
  *
  * ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -25,20 +27,12 @@
  * removed, then even MPI 2.0 will do.
  */
 #define MPI_VER_REQ 2
-#define MPI_SUBVER_REQ 1
+#define MPI_SUBVER_REQ 0
 // check MPI version for conformity during compilation
 #if !defined(MPI_VERSION) || !defined(MPI_SUBVERSION)
 #	error "Can not determine MPI version, hence MPI is too old."
 #else
-/* Microsoft MPI claims to support most of the MPI 2.2 features (and even some of 3.1), but declares only 2.0, see
- * https://github.com/microsoft/Microsoft-MPI/issues/15 . We, thus, use the following hack to assume its support for
- * MPI 2.2.
- */
-#	if defined(MSMPI_VER) && (MPI_VERSION==2) && (MPI_SUBVERSION<2)
-#		define MPI_PREREQ(major,minor) GREATER_EQ2(2,2,major,minor)
-#	else
-#		define MPI_PREREQ(major,minor) GREATER_EQ2(MPI_VERSION,MPI_SUBVERSION,major,minor)
-#	endif
+#	define MPI_PREREQ(major,minor) GREATER_EQ2(MPI_VERSION,MPI_SUBVERSION,major,minor)
 #	if !MPI_PREREQ(MPI_VER_REQ,MPI_SUBVER_REQ)
 #		error "MPI version is too old."
 #	endif
@@ -46,9 +40,18 @@
 
 /* We use some extensions from 2.2, if available. Namely MPI_C_BOOL and MPI_C_DOUBLE_COMPLEX. Those types may be
  * available in earlier implementations, but we actually use them only when implementation declares itself conforming to
- * MPI 2.2 (to avoid some subtle problems). The only exception is Microsoft MPI - see above.
- * For OpenMPI this is since version 1.7.3. If this version is found, it is further required during runtime.
+ * MPI 2.2 (to avoid some subtle problems). For OpenMPI this is since version 1.7.3. If this version is found, it is
+ * further required during runtime.
+ *
+ * While MPI 2.2 fully supports bool & complex datatypes (including reduce operations), there is lack of the support of
+ * reduction on Windows. The most advanced implementation (for which binaries are available) is MPICH2 1.4.1p1 - it
+ * doesn't support reduce on complex numbers, although the same Unix version does.
+ * http://trac.mpich.org/projects/mpich/ticket/1525 . Moreover, MPICH2 1.5 and further can't even be compiled on
+ * Windows. http://trac.mpich.org/projects/mpich/ticket/1557
+ *
+ * Thus, we use a special test of MPICH2 deficiency further on.
  */
+#define DEFICIENT_MPICH2 ( defined(MPICH2) && defined(WINDOWS) && (MPICH2_NUMVERSION<=10401301) )
 
 // Runtime (library) requirements depend on the MPI used for compilation
 #define RUN_MPI_VER_REQ MPI_VER_REQ
@@ -57,12 +60,7 @@
 #	define RUN_MPI_SUBVER_REQ 2
 //	Complex is used either partly or fully (with reduce), bool is used only when fully supported.
 #	define SUPPORT_MPI_COMPLEX
-/* While MPI 2.2 fully supports bool & complex datatypes (including reduce operations), there is lack of the support of
- * reduction on old MPICH2 implementations for Windows. The latest implementation with available binaries is
- * MPICH2 1.4.1p1 - it doesn't support reduce on complex numbers, although the same Unix version does.
- * http://trac.mpich.org/projects/mpich/ticket/1525 . Luckily, Microsoft MPI does not have this problem.
- */
-#	if !( defined(MPICH2) && defined(WINDOWS) && (MPICH2_NUMVERSION<=10401301) )
+#	if !DEFICIENT_MPICH2
 #		define SUPPORT_MPI_COMPLEX_REDUCE
 #		define SUPPORT_MPI_BOOL
 #	endif
