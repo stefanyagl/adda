@@ -22,6 +22,8 @@
 #include "io.h"
 #include "oclcore.h"
 #include "vars.h"
+// system headers
+#include <stdlib.h>
 
 // SEMI-GLOBAL VARIABLES
 
