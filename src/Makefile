@@ -1,10 +1,9 @@
-# Main makefile for ADDA package
+# Main makefile for ADDA
 # Requires GNU make (at least 3.81) to execute. 
 # Actual compiling goes in folders 'seq', 'mpi', and 'ocl' for sequential, parallel (MPI), and OpenCL (GPU accelerated)
 # version respectively
-# $Date::                            $
 #
-# Copyright (C) 2006-2014 ADDA contributors
+# Copyright (C) ADDA contributors
 # This file is part of ADDA.
 #
 # ADDA is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
@@ -86,15 +85,15 @@ ifneq ($(if $(MAKECMDGOALS),$(if $(filter $(NONTRIVIAL),$(MAKECMDGOALS)),1,),1),
 # are uncommented below are appended to the list specified elsewhere. Full list of possible options is the following:
 VALID_OPTS := DEBUG DEBUGFULL FFT_TEMPERTON PRECISE_TIMING NOT_USE_LOCK ONLY_LOCKFILE NO_FORTRAN NO_CPP \
               OVERRIDE_STDC_TEST OCL_READ_SOURCE_RUNTIME CLFFT_APPLE SPARSE USE_SSE3 OCL_BLAS NO_GITHASH \
-              ACCIMEXP
+
 # Debug mode. By default, release configuration is used (no debug, no warnings, maximum optimization). DEBUG turns on
-# producing debugging symbols (-g) and warnings and brings optimization down to O2 (this is required to produce all
-# possible warnings by the compiler). DEBUGFULL turns off optimization completely (for more accurate debugging symbols)
-# and turns on additional diagnostic messages in the source code (debug.c/h).
-override OPTIONS += DEBUG
+# producing debugging symbols (-g) and warnings and brings optimization down to O1. DEBUGFULL turns off optimization 
+# completely and turns on additional diagnostic messages in the source code (debug.c/h).
+#override OPTIONS += DEBUG
 #override OPTIONS += DEBUGFULL
-#override OPTIONS += SPARSE ACCIMEXP
-#USE_SSE3
+
+# Not clear if that is beneficial
+#OPTIONS += USE_SSE3
 
 # Temperton FFT (fft.h).
 #override OPTIONS += FFT_TEMPERTON
@@ -130,7 +129,7 @@ override OPTIONS += DEBUG
 # APPLE clFFT (fft.h)
 #override OPTIONS += CLFFT_APPLE
 
-# used AMDs CLBlas library for iterative solver (currently just suported in bicg method, oo effect on the other methods)
+# Uses clBLAS library for iterative solver (currently, only in BiCG, no effect on the other methods)
 #override OPTIONS += OCL_BLAS
 
 # By default, this Makefile invokes a Bash script that will determine the current subversion revision and pass it to
@@ -142,17 +141,13 @@ override OPTIONS += DEBUG
 # Choose one of the following. Can also be specified from command line to make (see explanation above for OPTIONS),
 # overriding definition below. To specify a different version of the compiler, e.g. 'gcc-4.7' instead of 'gcc', use
 # command 'make CC=gcc-4.7' (analogously for Fortran and C++ compilers).
-# gnu - tested for gcc 3.2.3 - 4.5.2 (most recent experience only with 4.3 and newer)
-# intel - tested on icc 9.0 - 11.0
+# gnu - tested for multiple versions starting from 3.2.3, but recently only 4.8 and higher
+# intel (Intel C++ and Fortran Compilers Classic) - tested for versions starting from 9.0, but recently only on 2021.1
+# intelX (Intel oneAPI C++ Compiler, based on LLVM, and new Fortran compiler) - tested on version 2021.1 
 # compaq - tested on Compaq C V6.5-303 (dtk) - last tested in 2007
 # ibm - tested on xlc 8.0 - last tested in 2008
 # hpux - tested on ia64
 # other -
-# WARNING: Currently intel compiler version 11.0 has problems with CUDA version 3.2 (Nvidia) CL headers. In particular,
-# cl_platform.h defines some types with __attribute__(vector...) not checking for support of these attributes (against
-# gcc version). Compiling with option '-no-gcc' does not seem to work either. So the only feasible option to use icc
-# with ocl seems to manually modify this (system) header or replace them with that from AMD SDK. Hopefully, this will
-# be fixed in later versions of CUDA and/or icc.
 COMPILER := gnu
 
 # Additional options for compiler. Flags specified below are appended to the ones specified in the environment or
@@ -174,8 +169,14 @@ override EXTRA_FLAGS +=
 #FFTW3_LIB_PATH := $(FFTWLIB)
 #FFTW3_INC_PATH := $(HOME)/include
 #FFTW3_LIB_PATH := $(HOME)/lib
-FFTW3_INC_PATH := "$(abspath ./../../fftw)"
-FFTW3_LIB_PATH := "$(abspath ./../../fftw)"
+#FFTW3_INC_PATH := "$(abspath ./../lib)"
+#FFTW3_LIB_PATH := "$(abspath ./../lib)"
+
+# --Fortran library path--
+# If your environment does not specify search path for Fortran libraries, you may get errors during linking of ADDA.
+# For instance, this may happen on macOS. Then uncomment the following line and modify the path if needed. 
+# This variable can also be defined in the enviroment or in the command line of make (see explanation above for OPTIONS) 
+#FORT_LIB_PATH := /usr/local/gfortran/lib
 
 #=======================================================================================================================
 # !!! End of control section. Everything below is not designed to be modified by user. However, advanced users may wish
@@ -185,13 +186,13 @@ FFTW3_LIB_PATH := "$(abspath ./../../fftw)"
 #=======================================================================================================================
 
 # C files are located in source folder (src/), other files may be added below
-CSOURCE := ADDAmain.c CalculateE.c calculator.c chebyshev.c comm.c crosssec.c GenerateB.c interaction.c io.c \
+CSOURCE := ADDAmain.c CalculateE.c calculator.c chebyshev.c cmplx.c comm.c crosssec.c GenerateB.c interaction.c io.c \
            iterative.c linalg.c make_particle.c memory.c  mt19937ar.c param.c Romberg.c sinint.c somnec.c \
-           timing.c vars.c bess.c
+           timing.c vars.c
 # Fortran files are located in src/fort folder, other files may be added below
 FSOURCE := d07hre.f d09hre.f d113re.f d132re.f dadhre.f dchhre.f dcuhre.f dfshre.f dinhre.f drlhre.f dtrhre.f \
            propaesplibreintadda.f
-F90SOURCE := special_functions.f90 
+F90SOURCE := 
 # C++ files are located in src/cpp folder, other files may be added below
 CPPSOURCE :=
 
@@ -292,6 +293,10 @@ ifneq ($(filter NO_FORTRAN,$(OPTIONS)),)
   CDEFS += -DNO_FORTRAN
   FSOURCE =
   F90SOURCE =
+else
+  ifdef FORT_LIB_PATH
+    LDFLAGS += -L$(FORT_LIB_PATH)
+  endif
 endif
 ifneq ($(filter NO_CPP,$(OPTIONS)),)
   $(info Without C++ sources)
@@ -325,10 +330,6 @@ else
     $(info Git hash $(HASH))
   endif
 endif
-ifneq ($(filter ACCIMEXP,$(OPTIONS)),)
-  CDEFS += -DACCIMEXP
-  $(info Using accelerated imExp with precomputed tables)
-endif
 # Process EXTRA_FLAGS
 ifneq ($(strip $(EXTRA_FLAGS)),)
   $(info Extra compiler options: '$(EXTRA_FLAGS)')
@@ -350,17 +351,27 @@ CPPLIBS +=
 DBGFLAG := -g
 # Compiler-specific options
 ifeq ($(COMPILER),gnu)
+  # produces version string in format like 80203
+  GCC_VERSION := $(shell gcc -dumpversion | sed -e 's/\.\([0-9][0-9]\)/\1/g' -e 's/\.\([0-9]\)/0\1/g' \
+    -e 's/^[0-9]\{3,4\}$$/&00/')
+   
   CC      := gcc
   CSTD    := -std=c99
-  COPT1   := -O2
-  COPT2   := -O3 -ffast-math -funroll-loops
-  CWARN   := -Wall -Wextra -Wcast-qual -Wpointer-arith -Wwrite-strings -Wstrict-prototypes \
-             -Wstrict-aliasing=1 -Wshadow -Wcast-align -Wnested-externs -Wcomment -Wno-overlength-strings
+  # in version 4.8 gcc introduced convenient flag for optimizations that do not interfere with debugging
+  ifeq "$(shell expr $(GCC_VERSION) \>= 40800)" "1"
+    COPT1 := -Og
+  else
+    COPT1 := -O1
+  endif
+  COPT2   := -Ofast
+  CWARN   := -Wall -Wextra -Wcast-qual -Wpointer-arith -Wwrite-strings -Wstrict-prototypes -Wformat=2 -Wnested-externs \
+             -Wstrict-aliasing=1 -Wshadow -Wcast-align -Wcomment -Wno-overlength-strings -Wno-format-nonliteral
+  # the following may be used to catch doublecomplex -> double implicit conversions (discarding imaginary parts),
+  # but produces too many false positives. You can invoke it as 'make OPTIONS=DEBUG | grep imaginary'
+  #CWARN += -Wconversion -Wno-sign-conversion -Wno-float-conversion
   # gcc versions prior to 4.7.2 are affected by bug http://gcc.gnu.org/bugzilla/show_bug.cgi?id=7263 , which causes
   # -pedantic flag to generates warnings on every occurence of I (complex i)
-  GCC_GTEQ_472 := $(shell expr `gcc -dumpversion | sed -e 's/\.\([0-9][0-9]\)/\1/g' -e 's/\.\([0-9]\)/0\1/g' \
-    -e 's/^[0-9]\{3,4\}$$/&00/'` \>= 40702)
-  ifeq "$(GCC_GTEQ_472)" "1"
+  ifeq "$(shell expr $(GCC_VERSION) \>= 40702)" "1"
     CWARN += -pedantic
   endif
   
@@ -374,9 +385,10 @@ ifeq ($(COMPILER),gnu)
   # Use gfortran if available (GCC 4 and later), otherwise try g77
   ifeq ($(shell which gfortran > /dev/null 2>&1 && echo 0),0)
     CF    := gfortran
-    FLIBS += -lgfortran -lquadmath
+    FLIBS += -lgfortran
   else
     # This is not expected to work for f90 sources but we keep it for now
+    $(warning Cannot locate gfortran - trying to continue with g77. If any issues arise, install gfortran)
     CF    := g77
     FLIBS += -lg2c
   endif
@@ -388,20 +400,27 @@ ifeq ($(COMPILER),gnu)
   CPPWARN := -Wall -Wextra
 else ifeq ($(COMPILER),intel)
   CC    := icc
-  CSTD  := -std=c99 -vec-report0 # the last flag is used to always remove vectorization remarks
-  COPT1 := -O2
-  COPT2 := -O3
-  CWARN := -Wall -Wcheck -diag-disable 981,1418,1419,1498,1572,2259
-
+  CSTD  := -std=c99
+  COPT1 := -O1
+  COPT2 := -Ofast
+  # remove 2259 to diagnose silent conversion between doublecomplex and double, but it will cause false positives
+  CWARN := -Wcheck -w3 -diag-disable 1418,1419,1572,2259,2282,11074,11076 
   CF    := ifort
-  FWARN += -vec-report0
-  FLIBS += -lifcore
-
+  #FLIBS := -lifcore
   CCPP  := icpc
-  CPPWARN := -Wall -Wcheck -diag-disable 279,981,1418,1419
-  # it seems that icpc relies on gcc stdc++ library anyway, but icc not always adds it during linking
+  #CPPLIBS += -lstdc++
+  CPPWARN := -Wcheck -w3 -diag-disable 279,1418,1419,11074,11076
+else ifeq ($(COMPILER),intelX)
+  CC    := icx
+  CSTD  := -std=c99
+  COPT1 := -O1
+  COPT2 := -Ofast
+  CWARN := -Wall -Wno-implicit-const-int-float-conversion -Wno-misleading-indentation
+  CF    := ifx
+  CCPP  := icpx
+  CPPWARN := -Wall
+  # it seems that icpx relies on gcc stdc++ library anyway, but icc not always adds it during linking
   CPPLIBS += -lstdc++
-  # if IPO is used, corresponding flags should be added to linker options: LDFLAGS += ...
 else ifeq ($(COMPILER),compaq)
   # This compiler was not tested since 2007. In particular, warning options may not fit exactly the C99 standard, to
   # which the code was transferred. Its support for 64 bit compilations is also undefined. No C++ compiler is defined.
@@ -409,7 +428,7 @@ else ifeq ($(COMPILER),compaq)
   CC    := cc
   CF    := f77
   #CSTD  = -std=c99
-  COPT1 := -O2
+  COPT1 := -O1
   COPT2 := -fast
   CWARN := -w0 -msg_disable nestedcomment,unknownpragma,unreachcode
 else ifeq ($(COMPILER),ibm)
@@ -421,7 +440,7 @@ else ifeq ($(COMPILER),ibm)
   CC    := xlc
   CF    := xlf
   CSTD  := -qlanglvl=extc99
-  COPT1 := -O2
+  COPT1 := -O1
   COPT2 := -O3 -qcache=auto
   DEPFLAG := -qmakedep=gcc
   CWARN   := -qsuppress=1506-224:1506-342:1500-036
@@ -431,9 +450,9 @@ else ifeq ($(COMPILER),hpux)
   CC    := cc
   CF    := f90
   CSTD  := -AC99
-  COPT1 := +O2 +DD64
+  COPT1 := +O1 +DD64
   COPT2 := +O3 +DD64
-  DEPFLAG :+= +Md
+  DEPFLAG := +Md
   CWARN :=
   CFLAGS += -DNOT_USE_LOCK
 else ifeq ($(COMPILER),other)
@@ -511,12 +530,12 @@ cleanocl:
 	
 cleanrunsseq: 
 	@echo "Removing output of sequential version of ADDA"
-	cd $(SEQ) && rm -f -r ExpCount run* test*
+	cd $(SEQ) && rm -f -r ExpCount run???_* test???_*
 
 cleanrunsmpi: 
 	@echo "Removing output of MPI version of ADDA"
-	cd $(MPI) && rm -f -r ExpCount run* test*
+	cd $(MPI) && rm -f -r ExpCount run???_* test???_*
 	
 cleanrunsocl: 
 	@echo "Removing output of OpenCL version of ADDA"
-	cd $(OCL) && rm -f -r ExpCount run* test*
+	cd $(OCL) && rm -f -r ExpCount run???_* test???_*
